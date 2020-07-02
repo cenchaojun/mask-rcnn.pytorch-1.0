@@ -1,0 +1,40 @@
+mask-rcnn.pytorch-1.0 文件说明:
+
+路径设置:
+cach_path: lib/datasets/hospital_dataset.py
+mAP_path: lib/datasets/hospital_dataset_evaluator.py
+
+训练:
+----|训练执行文件：train_hospital.sh
+----|tools
+	----|train_net_hosptial.py 训练文件
+----|configs
+	----|baselines
+		----|e2e_mask_rcnn-R-50_hosptial.ymal 训练参数配置文件
+----|lib
+  	----|datasets
+		----|dataset_catalog.py 数据路径配置文件
+		----|roidb.py 读取训练文件 以roidb 形式返回
+		----|hospital_dataset.py 读取胸片数据
+	----|core
+		----|config.py 参数配置文件 会将ymal中的参数 copy到此文件中
+	----|roi_data
+		----|loader.py 将roidb数据读到dataset中
+	----|modeling
+		----|model_builder.py 创建模型
+
+
+测试:
+----|测试执行文件:test_hospital.sh
+----|tools
+    ----|test_net_hosptial.py 测试文件
+----|lib
+    ----|core
+        ----|test_engine.py run_inference()
+    ----|utlis
+        ----|subprocess.py 多gpu处理 会单独调用test_net()
+    ----|datasets 评估代码
+        ----|task_evaluation.py
+        ----|hospital_dataset_evaluator.py evaluate_mAP() 生成txt文件供mAP代码使用
+----|mAP
+    ----|main.py 给出AP指标

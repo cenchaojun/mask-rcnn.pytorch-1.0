@@ -1,0 +1,34 @@
+训练新的模型:
+1.建立part与object的关系，使用分割模型先将part分割出来，并将信息保存到json文件中。
+  --| 检测模型 读取数据函数在 hosptial_dataset.py -> loader.py (get_minibatch)
+      -> minibatch.py (_get_image_blob)
+
+修改部分:
+1.hospiatl_dataset.py
+  ----|_load_annotation_to_roidb()  增加part信息
+  ----|JsonDataset __init__() 增加part信息
+2.roidb.py
+  ----|extend_with_flipped_entries() 增加part反转信息
+3.rpn.py
+  ----|add_rpn_blobs() 增加part关键字
+
+test_engine.py im_dedect_all() -> test.py im_detect_bbox()
+4.test.py
+  ----|测试代码 修改读入数据 im_detect_bbox() 函数
+
+5.mask_rcnn_heads.py 修改foward函数，part_rois=None 这部分的处理值得商榷
+
+
+# rpn 与 rpn+fpn的区别
+1. 提取base feature
+rpn: conv_body: resnet_conv4 box_head: resnet_conv5
+ResNet.py
+blob(单层) 过conv层后 [1, 1024, 82, 82] 经过roi pooling后 [512, 1024, 14, 14] 再过一层 conv5 [512, 2048, 7, 7]
+最后通过avg_pool 变为[512, 2048, 1, 1]
+
+FPN.py fast_rcnn_heads.py
+rpn+fpn: conv_body: FPN.fpn_ResNet50_conv5_body box_head: resnet_conv5
+blob(列表) [1, 256, 82, 82] 每层通道256 尺度不一样 每层的proposal_box数量不一样 总和为512
+四层分别经过roi_pooling [x, 256, 7, 7] sum(x) = 512 最后通道数会通过两层fc变为1024 [x, 1024, 1 , 1]
+
+2.

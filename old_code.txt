@@ -1,0 +1,366 @@
+# 旧版代码 
+
+####### paper1 #######
+# a cnn for image-wise attention
+
+# class Attention_Net(nn.Module):
+#     def __init__(self, dim_in):
+#         super(Attention_Net, self).__init__()
+#         self.dim_out = dim_in // 64 # dim_in 2048
+#         self.conv = torch.nn.Conv2d(dim_in, self.dim_out, kernel_size=3, stride=2)
+#         self.avg_pool = nn.AdaptiveAvgPool2d(1)
+#         self.fc = nn.Linear(self.dim_out, dim_in*2) # dim: D//64 -> D*2 +1 原因：cls_weight
+#         # note: the dim of class_weight,base_feature are 2048,1024
+#
+#         self._init_weights()
+#
+#     def _init_weights(self):
+#         torch.nn.init.normal_(self.conv.weight, mean=0.0, std=0.02)
+#         torch.nn.init.normal_(self.fc.weight, std=0.01)
+#         torch.nn.init.constant_(self.fc.bias, 0)
+#
+#     def forward(self, x, class_weight): # D 1024
+#         out = self.conv(x) # [N,D,H,W] -> [N,D/64,H/2,W/2]
+#         out = self.avg_pool(out) # [N,D/64,H/2,W/2] -> [N,D/64,1,1]
+#         out = out.squeeze(3).squeeze(2) # [N,D/64,1,1] -> [N,D/64]
+#         out = self.fc(out) # [N,D/64] -> [N,D*2]
+#         class_weight = class_weight.transpose(1, 0)
+#         out = torch.matmul(out, class_weight) # [N,C]
+#         out = F.softmax(out, dim=1) # softmax to raw
+#
+#         return out
+
+####### paper2 #######
+# two fc with relu for realizing a non-linear function
+class Non_Linear(nn.Module):
+    def __init__(self, dim_in):
+        super(Non_Linear, self).__init__()
+        self.dim_out = 256
+        self.fc1 = nn.Linear(dim_in, dim_in//2)
+        self.relu1 = nn.ReLU(inplace=True)
+        self.fc2 = nn.Linear(dim_in//2, self.dim_out)
+        self.relu2 = nn.ReLU(inplace=True)
+
+        self._init_weights()
+
+    def _init_weights(self):
+        torch.nn.init.normal_(self.fc1.weight, std=0.01)
+        torch.nn.init.constant_(self.fc1.bias, 0)
+        torch.nn.init.normal_(self.fc2.weight, std=0.01)
+        torch.nn.init.constant_(self.fc2.bias, 0)
+
+    def forward(self,x):
+        out = self.fc1(x)
+        out = self.relu1(out)
+        out = self.fc2(out)
+        out = self.relu2(out)
+
+        return out
+
+# LJ
+# generate sparse matrix
+def sparse_matrix(M):
+    raw = len(M)
+    # topk_indexs = []
+
+    for i in range(raw):
+        topk, topk_index = torch.topk(M[i], 32)
+        # pdb.set_trace()
+        top32_value = topk[-1]
+        M[i][M[i] < top32_value] = 0.0
+        # topk_indexs.append(topk_index.sort()[0])
+
+    return M #, topk_indexs
+
+
+def box_xywh_center(boxes, im_shape, current_device):
+    acquired_box = torch.zeros((boxes.size(0), 2)) \
+        .cuda(current_device)  # pred_boxes [Nr,4*c] -> acquired_box [Nr,2] center (x,y)
+
+    for i in range(len(boxes)):
+        cx = ((boxes[i][0] + boxes[i][2]) / 2) / im_shape[1]
+        cy = ((boxes[i][1] + boxes[i][3]) / 2) / im_shape[0]
+        acquired_box[i][0] = cx
+        acquired_box[i][1] = cy
+        # pdb.set_trace()
+
+    return acquired_box
+
+# LJ
+# clc gauss  -> see gauss function
+def clc_gauss_kernel(d_ceta, mean_vect, covar_matrix, current_device):
+    mean_vect = mean_vect.cuda(current_device) # [2,1]
+    covar_matrix = covar_matrix.cuda(current_device) # [2,2]
+
+    d_ceta = d_ceta.unsqueeze(-1) # [Nr,Nr,2,1]
+    temp1 = d_ceta - mean_vect
+    temp2 = torch.matmul(temp1.permute(0, 1, 3, 2), covar_matrix) # [Nr,Nr,1,2] [2,2]
+    temp3 = torch.matmul(temp2, temp1)
+    temp3 = temp3.squeeze()
+
+    return torch.exp(-0.5 * temp3)
+
+
+# # paper1
+# # LJ
+# # Image-wise attention network
+# self.att_net = Attention_Net(self.Conv_Body.dim_out)
+#
+# # LJ
+# # load graph adj matrix
+# graph_path = '/home/lianjie/mask-rcnn.pytorch-1.0/graph/graph_two.npy'
+# self.adj_matrix = np.load(graph_path)
+# self.adj_matrix = torch.from_numpy(self.adj_matrix)
+# self.adj_matrix = self.adj_matrix.type(torch.FloatTensor)
+# # self.adj_matrix = self.adj_matrix.cuda()
+#
+# if not cfg.MODEL.RPN_ONLY:
+#     self.trans_dim = self.Box_Outs.cls_score.in_features
+#     self.out_dim = self.trans_dim // 4  # 2048 - > 512
+#
+#     # there are two ways to trainsfrom dimension (1)1x1 conv (2) a transform matrix
+#     self.conv_1x1 = torch.nn.Conv2d(self.trans_dim, self.out_dim, kernel_size=1, stride=1)
+#     torch.nn.init.normal_(self.conv_1x1.weight, mean=0.0, std=0.02)
+#     self.Box_Outs_New = fast_rcnn_heads.fast_rcnn_outputs(
+#         self.Box_Head.dim_out + self.out_dim)
+
+# # paper2
+# # LJ
+# # Non-Linear function
+# self.non_linear = Non_Linear(self.Box_Head.dim_out)
+#
+# # LJ
+# # mean_vector and covariance matrix for caussian kernel
+# # self.mean_vect = torch.nn.Parameter(torch.zeros((2, 1)))
+# # self.covar_matrix = torch.nn.Parameter(torch.ones((2, 2)) // 2)
+# self.mean_vect = torch.nn.Parameter(torch.randn((2, 1)))
+# self.covar_matrix = torch.nn.Parameter(torch.randn((2, 2)))
+# # self.d_ceta_weight = torch.nn.Parameter(torch.randn((2, 1)))
+# # self.spatial_relu = nn.ReLU(inplace=True)
+#
+# # LJ
+# # Fc for transfer dim of outputs
+# # self.trans_dim = self.Box_Outs.cls_score.in_features # 2048
+# # self.out_dim = 256  # 256
+# # self.fc = nn.Linear(self.trans_dim, self.out_dim)
+# # torch.nn.init.normal_(self.fc.weight, std=0.01)
+# # torch.nn.init.constant_(self.fc.bias, 0)
+# # self.Box_Outs_New = fast_rcnn_heads.fast_rcnn_outputs(
+# #          self.Box_Head.dim_out + self.out_dim)
+#
+# self.trans_dim = self.Box_Outs.cls_score.in_features
+# self.out_dim = self.trans_dim // 4  # 2048 - > 512
+# self.conv_1x1 = torch.nn.Conv2d(self.trans_dim, self.out_dim, kernel_size=1, stride=1)
+# torch.nn.init.normal_(self.conv_1x1.weight, mean=0.0, std=0.02)
+# self.Box_Outs_New = fast_rcnn_heads.fast_rcnn_outputs(
+#     self.Box_Head.dim_out + self.out_dim)
+
+
+# my code paper1(fea) + paper2(spatial)
+# Image-wise attention network
+# self.att_net = Attention_Net(self.Conv_Body.dim_out)
+
+# load graph adj matrix
+# graph_path = '/home/lianjie/mask-rcnn.pytorch-1.0/graph/graph_one.npy'
+# self.adj_matrix = np.load(graph_path)
+# self.adj_matrix = torch.from_numpy(self.adj_matrix)
+# self.adj_matrix = self.adj_matrix.type(torch.FloatTensor)
+
+# extracting nonlinaer relations of d_ceta
+# self.d_ceta_weight = torch.nn.Parameter(torch.randn((2, 1)))
+# self.spatial_relu = nn.ReLU(inplace=True)
+#
+# # new box_out
+# self.trans_dim = self.Box_Outs.cls_score.in_features
+# self.out_dim = self.trans_dim // 4  # 2048 - > 512
+# self.conv_1x1 = torch.nn.Conv2d(self.trans_dim, self.out_dim, kernel_size=1, stride=1)
+# torch.nn.init.normal_(self.conv_1x1.weight, mean=0.0, std=0.02)
+# self.Box_Outs_New = fast_rcnn_heads.fast_rcnn_outputs(
+#     self.Box_Head.dim_out + self.out_dim)
+
+
+
+
+# ----------------
+# paper 1
+# ----------------
+# blob_conv : [N,D,h,w]  N:num of images D: (1024)  base feature
+# res5_feat: [N*512,2048,7,7] feature of region propsals (512 defined by BATCH_SIZE_PER_IM）before avgpooling
+#            prepare for mask branch or keypoint branch
+# rpn_ret: a dict consists of the information of rpn net (proposed anchors,rois and so on)
+# box_feat: [N*512,2048,1,1] feature of proposed regions
+# cls_weight: [C,D] C:class D:feature dimension (2048) note:remove background class
+# cls_p: [N*Nr,C] Nr:num of region propsals C:class
+# trans_matrix: transformtion weight matrix
+# self.conv_1x1: 1x1 conv
+# cls_score_old: [Nr,C] class score before softmax
+# cls_att: [N,C] the attention classes
+# self.adj_matrix: [C,C] the adjacency matrix of graph
+
+# realizing for paper 1
+# cls_weight = self.Box_Outs.cls_score.weight[:,:] # do not remove background class
+# cls_score_old = cls_score_old[:,:] # do not remove background class
+# cls_p = F.softmax(cls_score_old, dim=1) # softmax to raw
+# cls_att = self.att_net(blob_conv,cls_weight)
+# cls_att = cls_att.view((cls_att.size(1),1)) # [1,C] -> [C,1]
+#
+# pdb.set_trace()
+# self.adj_matrix = self.adj_matrix.cuda(torch.cuda.current_device()) # load current usful cuda device
+# temp1 = torch.matmul(self.adj_matrix,cls_weight) # EM
+# temp2 = cls_att * temp1 # a x EM
+# temp3 = torch.matmul(cls_p,temp2) # P(a x EM)
+# temp3 = temp3.view((temp3.size(0),temp3.size(1),1,1)) # [Nr,D] -> [Nr,D,1,1]
+# f_enhanced =  self.conv_1x1(temp3) # [Nr,D,1,1] -> [Nr,E,1,1]
+# f = torch.cat((box_feat, f_enhanced), dim=1)  # channel cat
+# cls_score, bbox_pred = self.Box_Outs_New(f)
+
+
+# ----------------
+# paper 2
+# ----------------
+# box_feat: [Nr,2048,1,1] feature of proposed regions
+# nl_box_feat: [Nr,256] transfrom box_featrure by a non linear function
+# sparse_graph: [Nr,Nr]
+# cls_weight: [C,D] C:class D:feature dimension (2048)
+# cls_p: [Nr,C] Nr:num of region propsals C:class
+# visual_embedding: [Nr,D] the visual embedding of each region
+# bbox_pred_old: [Nr,4*C]
+# im_info: [N,3] 3-> [h,w,im_scale]
+# rois:[Nr,5] keep Nr boxes after rpn nms
+# boxes: [cx,cy,w,h] cx,cy: center
+# box_deltas: coordinate transformation (details see boxes.py)
+
+# # realizing for paper 2
+# current_device = torch.cuda.current_device()
+# box_feat = box_feat.squeeze(3).squeeze(2) # [Nr,D,1,1] -> [Nr,D]
+# nl_box_feat = self.non_linear(box_feat) # transform box_feat by a non_linear function
+# graph = torch.matmul(nl_box_feat, nl_box_feat.transpose(1, 0))
+# sparse_graph = sparse_matrix(graph)
+# cls_p = F.softmax(cls_score_old, dim=1)  # softmax to raw
+# cls_weight = self.Box_Outs.cls_score.weight[:,:] # do not remove background class
+# visual_embedding = torch.matmul(cls_p, cls_weight)
+# # pdb.set_trace()
+#
+# # original code: see test.py im_detect_bbox()
+# # get (Nr) boxes coordinate for calculating the dsitance and angle between two boxes
+# rois = rpn_ret['rois']
+# # if rois.shape[0] != 128:
+# #     pdb.set_trace()
+# img_scale = float(im_info[0][-1])
+# boxes = rois[:, 1:5] / [img_scale]
+# boxes = torch.from_numpy(boxes).cuda(current_device)
+#
+# if self.training: # get image shape for bbox transform
+#     im_shape = cv2.imread(roidb[0]['image']).shape
+# else:
+#     im_shape = im.shape
+#
+# acquired_box = box_xywh_center(boxes, im_shape, current_device)
+# transfer_box1 = acquired_box.view(-1, 1, acquired_box.size(-1)) # [Nr,2] -> [Nr,1,2]
+# transfer_box2 = acquired_box.view(1, -1, acquired_box.size(-1)) # [Nr,2] -> [1,Nr,2]
+# dx_dy_box = transfer_box1 - transfer_box2 # [Nr,Nr,2] -> (dx,dy)
+# dx_box, dy_box = dx_dy_box.split([1, 1], dim=2)
+# distance_box = torch.sqrt(dy_box * dy_box + dx_box * dx_box) # clc distance
+# ceta_box = torch.atan2(dy_box, dx_box) # clc ceta
+# d_ceta_box = torch.cat((distance_box, ceta_box), dim=2)
+# gauss_kernel1 = clc_gauss_kernel(d_ceta_box, self.mean_vect, self.covar_matrix, current_device)
+# spatial_relation =  gauss_kernel1 * sparse_graph # [Nr,Nr]
+# # spatial_weight = torch.matmul(d_ceta_box.unsqueeze(-2), self.d_ceta_weight).squeeze()
+# # spatial_relation =  self.spatial_relu(spatial_weight) * sparse_graph # [Nr,Nr]
+#
+# spatial_relation = spatial_relation.view(spatial_relation.size(0), 1, spatial_relation.size(1)) # [Nr,Nr] - > [Nr,1,Nr]
+# region_fea = torch.matmul(spatial_relation, visual_embedding).squeeze()
+# # sparse_graph = sparse_graph.view(sparse_graph.size(0) , 1, sparse_graph.size(1))
+# # region_fea = torch.matmul(sparse_graph, visual_embedding).squeeze()
+#
+# # f_enhanced = self.fc(f_enhanced)
+# # f = torch.cat((box_feat, f_enhanced), dim=1)  # channel cat
+# # f = f.view((f.size(0), f.size(1), 1, 1))
+#
+# region_fea = region_fea.view((region_fea.size(0), region_fea.size(1), 1, 1)) # [Nr,D] -> [Nr,D,1,1]
+# f_enhanced =  self.conv_1x1(region_fea) # [Nr,D,1,1] -> [Nr,E,1,1]
+# box_feat = box_feat.view((box_feat.size(0), box_feat.size(1), 1, 1))
+# f = torch.cat((box_feat, f_enhanced), dim=1)  # channel cat
+#
+# # cls_score, bbox_pred = self.Box_Outs_New(f)
+# cls_score, _ = self.Box_Outs_New(f)
+
+# ---------------------------------------
+# my code: paper1(fea)+paper2(spatial)
+# ---------------------------------------
+# current_device = torch.cuda.current_device()
+# cls_weight = self.Box_Outs.cls_score.weight # do not remove background class
+# cls_p = F.softmax(cls_score_old, dim=1) # softmax to raw
+# cls_att = self.att_net(blob_conv, cls_weight)
+# cls_att = cls_att.view((cls_att.size(1), 1)) # [1,C] -> [C,1]
+
+# self.adj_matrix = self.adj_matrix.cuda(current_device) # load current usful cuda device
+# cls_fea = torch.matmul(self.adj_matrix, cls_weight) # EM
+# cls_att_fea = cls_att * cls_fea # a x EM
+# cls_att_fea = cls_att * cls_weight  # 去掉类别关系
+# visual_embedding = torch.matmul(cls_p, cls_att_fea) # P(a x EM) [Nr,D]
+
+# rois = rpn_ret['rois']
+# img_scale = float(im_info[0][-1])
+# boxes = rois[:, 1:5] / [img_scale]
+# boxes = torch.from_numpy(boxes).cuda(current_device)
+#
+# if self.training: # get image shape for coordinate normalization
+#     im_shape = cv2.imread(roidb[0]['image']).shape
+# else:
+#     im_shape = im.shape
+#
+# acquired_box = box_xywh_center(boxes, im_shape, current_device)
+# transfer_box1 = acquired_box.view(-1, 1, acquired_box.size(-1)) # [Nr,2] -> [Nr,1,2]
+# transfer_box2 = acquired_box.view(1, -1, acquired_box.size(-1)) # [Nr,2] -> [1,Nr,2]
+# dx_dy_box = transfer_box1 - transfer_box2 # [Nr,Nr,2] -> (dx,dy)
+# dx_box, dy_box = dx_dy_box.split([1, 1], dim=2)
+# distance_box = torch.sqrt(dy_box * dy_box + dx_box * dx_box) # clc distance
+# ceta_box = torch.atan2(dy_box, dx_box) # clc ceta
+#
+# d_ceta_box = torch.cat((distance_box, ceta_box), dim=2) # [Nr,Nr,2]
+# spatial_weight = torch.matmul(d_ceta_box.unsqueeze(-2), self.d_ceta_weight).squeeze()
+# spatial_relation = self.spatial_relu(spatial_weight) # [Nr,Nr]
+# # spatial_relation = spatial_relation.view(spatial_relation.size(0), 1, spatial_relation.size(1))  # [Nr,Nr] - > [Nr,1,Nr]
+#
+# # region_fea = torch.matmul(spatial_relation, visual_embedding).squeeze()
+# region_fea = torch.matmul(spatial_relation, visual_embedding)
+# region_fea = region_fea.view((region_fea.size(0), region_fea.size(1), 1, 1)) # [Nr,D] -> [Nr,D,1,1]
+
+# region_fea = visual_embedding.view((visual_embedding.size(0), visual_embedding.size(1), 1, 1))
+# f_enhanced = self.conv_1x1(region_fea) # [Nr,D,1,1] -> [Nr,E,1,1]
+# f = torch.cat((box_feat, f_enhanced), dim=1)  # channel cat
+#
+# cls_score, bbox_pred = self.Box_Outs_New(f)
+
+
+# # Box 前n个为非背景框取前64个 也有可能当前box全为背景框
+# # 存在取不到前64个框的情况
+# self.relation_box_num = 32
+# self.relation_em_dim = 32
+# self.relation_dim = self.relation_box_num * self.relation_em_dim
+# # self.Wo = nn.Linear(self.relation_box_num * self.em_dim, self.relation_dim)
+# # self.relu_box = nn.ReLU(inplace=False)
+
+# 返回box之间的relation 不work 思想relation network
+def get_object_object_relation(boxes, relation_boxes, em_dim, current_device,
+                               relation_box_num):
+    # relation_box 数量可能不够64 此时补充box数量
+    # pdb.set_trace()
+    while relation_boxes.shape[0] < relation_box_num:
+        append_box_num = relation_box_num - relation_boxes.shape[0]
+        if append_box_num > boxes.shape[0]:
+            append_box_num = boxes.shape[0]
+        relation_boxes = np.append(relation_boxes, boxes[:append_box_num], axis=0)
+
+    boxes = torch.from_numpy(boxes).cuda(current_device).detach()
+    relation_boxes = torch.from_numpy(relation_boxes).cuda(current_device).detach()
+    matrix = extract_position_matrix(boxes, relation_boxes)
+    embedding = extract_position_embedding(matrix, em_dim)
+    # [512, 128x64]
+    # embedding = embedding.view((embedding.size(0), -1))
+    # relation = relu(Wo(embedding))
+    # object_object_relation = relation.view(relation.size(0), relation.size(1), 1, 1)
+    object_object_relation = embedding.view((embedding.size(0), -1, 1, 1))
+
+    return  object_object_relation

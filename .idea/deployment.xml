@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="PublishConfigData" autoUpload="Always" serverName="deepwise" preserveTimestamps="false">
+    <serverData>
+      <paths name="deepwise">
+        <serverdata>
+          <mappings>
+            <mapping deploy="/home/lianjie/mask-rcnn.pytorch-1.0" local="$PROJECT_DIR$" web="/" />
+          </mappings>
+        </serverdata>
+      </paths>
+    </serverData>
+    <option name="myAutoUpload" value="ALWAYS" />
+  </component>
+</project>

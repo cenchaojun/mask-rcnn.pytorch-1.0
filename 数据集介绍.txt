@@ -1,0 +1,23 @@
+/home/lianjie/cvpr_code/part_seg/found_yy_jsons/train_gk_yy.json
+从公开数据集找到杨艳标注文件 因为失误导致第一生成的json被覆盖 这是找回数据后新生成的json
+训练集 3025（原3000） 测试集 553 （原578）
+现模型 1.2w步前均为原数据训练 现在进行fintune 使用最新的json
+模型命名方式 yy_base yy_base_cls yy_base_spa yy_context yy_ours
+测试数据均在 test_yy/ 文件夹中 命名方式与模型命名方式一样
+测试结果 在/mAP/yy/ 文件夹中 命名方式 gk_yy_spa_0.5 .....
+
+
+/home/lianjie/cvpr_code/part_seg/yy_jsons/train_all_yy.json
+从非公开数据集找到杨艳标注文件
+训练的模型命名方式 all_yy_base all_yy_cls
+
+
+命名方式为gk_yy_base gk_yy_cls的模型均为
+/home/lianjie/cvpr_code/part_seg/yy_jsons/train_gk_yy.json
+的训练结果 因为失误洗掉json后重新生成的json文件 但base_line的精度低
+
+
+
+现在用的所有数据均为found_yy_jsons 里的文件
+
+yy_jons 里all_yy.json 文件 类别比差别太大 效果不好重新生成

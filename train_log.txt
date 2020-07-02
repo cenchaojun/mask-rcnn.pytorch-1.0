@@ -1,0 +1,241 @@
+#训练记录
+
+dir = mask-rcnn.pytorch-1.0
+
+####### 类别关系: #######
+
+命名：
+----|original 原始模型 mAP1 40.19 mAP50 25.96
+----|zero 所有类频数统计 从头训练
+    ----|graph_detection/gen_graph_zero.py
+----|one 只对特定几类建立图的关系 从 original 进行finetune
+    ----|dir/graph/gen_graph.py
+         建立关系的类(多发结节，弥漫性结节，空洞，纤维化表现，结节，肺不张，肺实变，肺结核，肿块，胸腔积液)
+         加上了背景类
+----|two 对所有类建立图关系，增加背景类，从 original 进行finetue
+
+
+#训练:
+
+#模型输出：
+original:
+----|/data1/liujingyu/mask_rcnn_Outputs/e2e_mask_rcnn_R-50_hospital/7.31-more+/ckpt
+zero:
+----|jeline_output/e2e_mask_rcnn_R-50_hospital/zero/ckpt
+one:
+----|jeline_output/e2e_mask_rcnn_R-50_hospital/one/ckpt  95999 steps
+two:
+----|jeline_output/e2e_mask_rcnn_R-50_hospital/two/ckpt
+
+#测试：
+
+#测试文件输出
+----|jeline_output/
+    ----|test_original
+    ----|test_zero
+
+#mAP结果
+----|mAP/results/
+    ----|results_original.txt 原始模型
+    ----|results_zero.txt 建立图关系（所有类频数统计）从头训练
+
+
+
+训练loss记录
+original:
+
+zero:
+
+1. 69000
+loss:0.76
+acc_cls:0.944
+loss_cls: 0.19 loos_box:0.10 loss_mask:0.36
+loss_rpn_cls: 0.09 loss_rpn_bbox:0.04
+
+2. 129000
+loss:0.59
+acc_cls:0.945
+loss_cls: 0.15 loos_box:0.08 loss_mask:0.25
+loss_rpn_cls: 0.06 loss_rpn_bbox:0.02
+
+
+####### 空间关系: #######
+
+训练出现的错误：
+torch.parameter 参数没有加载到计算图中 变量命名错误
+
+2019.8.16
+空间关系 新训练的模型：
+three 高斯(random) 74913step
+----| mAP50:21.73 mAP1:35.72 512box(train) 512box
+----| mAP50:21.04 mAP1:34.94 512box(train) default
+----| mAP50:23.93 mAP1:37.44 512box(train) 128box
+
+three 高斯(random) 74913step -> 84999step 不重训box
+----| mAP50:26.36 mAP1:39.73 512box(train) 512box
+----| mAP50:27.85 mAP1:40.43 512box(train) 128box
+----| mAP50:26.88 mAP1:39.07 512box(train) 64box
+
+three 高斯(random) 84999step -> 95999step 不重训box
+----| mAP50:24.08 mAP1:37.57 128box(train) 128box
+
+
+four relu 95999step
+----| mAP50:22.51 mAP1:36.83 128box(train) 128box
+
+five 无 95999step
+----| mAP50:21.68 mAP1:35.08 128box(train) 128box
+
+six 高斯(norm) 95999step
+----| mAP50:20.54 mAP1:34.69 128box(train) 128box
+
+总结:
+1. 训练时,box num 大些比较好, 测试时，box_num 小些比较好。
+2. 不重训box效果较好。
+3. 空间关系是work的,relu效果比高斯(可能自己没写好)效果好.
+
+训练loss记录
+
+three:
+
+[Aug16-15-29-26_lung-plain-01_step][e2e_mask_rcnn_R-50_hospital.yaml][Step 77961 / 96000]
+                loss: 0.492845, lr: 0.000038 time: 1.324776, eta: 6:38:18
+                accuracy_cls: 0.956787
+                loss_cls: 0.123262, loss_bbox: 0.071099, loss_mask: 0.242533
+                loss_rpn_cls: 0.051290, loss_rpn_bbox: 0.030185
+
+
+
+
+####### 空间+类别关系: #######
+
+
+seven relu空间+类别  54999step 重训box
+[Nr,Nr] x [Nr,D]
+
+----| mAP50:28.47 mAP1:41.37 512box 128box
+----| mAP50:28.63 mAP1:42.74 512box 512box
+----| mAP50:27.88 mAP1:42.55 512box default
+
+[Nr,1,Nr] x [Nr,D]
+----| mAP50:28.63 mAP1:42.74 512box 512box
+
+seven relu空间+类别  54999step -> 95999step 不重训box
+----| mAP50:30.24 mAP1:44.31 512box 512box
+
+seven_2 relu空间+类别  0step -> 95999step 不重训box
+----| mAP50:30.00 mAP1:43.58 512box 512box
+
+seven_3 relu空间+类别  54999step -> 95999step 重训box
+----| mAP50:30.17 mAP1:43.94 512box 512box
+
+one 重训box
+----| mAP50:30.01 mAP1:44.06 512box default
+----| mAP50:29.64 mAP1:43.61 512box 512box
+
+one_2  不重训box
+----| mAP50:29.81 mAP1:43.95 512box 512box
+
+
+eight 基于seven 去掉类别关系 不重训box
+----| mAP50:29.89 mAP1:44.44 512box 512box
+
+eight_2 基于seven 去掉类别关系 重训box
+----| mAP50:28.93 mAP1:43.93 512box 512box
+
+nine 去掉所有图关系 只使用soft_mapping 不重训box
+----| mAP50:30.64 mAP1:43.75 512box 512box
+
+nine_2 去掉所有图关系 只使用soft_mapping 重训box
+----| mAP50:30.27 mAP1:44.16 512box 512box
+
+ten 直接fintune
+----| mAP50:--.-- mAP1:--.-- 512box 512box
+
+训练loss记录
+
+seven:
+
+[Aug16-21-51-12_lung-plain-01_step][e2e_mask_rcnn_R-50_hospital.yaml][Step 42701 / 96000]
+                loss: 0.469259, lr: 0.000500 time: 1.085711, eta: 16:04:28
+                accuracy_cls: 0.958252
+                loss_cls: 0.112486, loss_bbox: 0.055801, loss_mask: 0.235903
+                loss_rpn_cls: 0.046581, loss_rpn_bbox: 0.015435
+
+2019.9.20
+与源码区别:
+（1）attention网络的卷积层通道数不一样，且fc层后少一层relu层
+（2）增强特征的最后降维方式不一样，我采用1x1卷积，源码采用fc+relu，且降维和soft_mapping操作顺序不一样。
+（3）参与训练的loss不一样，我只取了新box的loss，源码新旧box的loss均参与训练。
+（4）我的代码中，旧box的训练梯度通过class_weight回传，源码中，旧box的训练梯度通过loss途径回传，\
+    class_weight进行了detach，截断了梯度回传。
+（5）源码的box训练有点像cascade-rcnn,进行了四级级联，这一点我没有参考。
+
+# 按照源码思想
+测试 均按1000box测试
+original 0.01 41.37% 0.5 25.96%
+sc （类别）0.01 42.89% 0.5 28.40%
+sc (类别 去除图关系) 0.01 42.89% 0.5 28.40% 还是需要重新训练
+sc (类别 去除att) 0.01 42.89% 还是需要重新训练
+sc1 (类别+空间) 0.01 42.62 0.5 28.04%
+sc2 (类别+relation_network) 44.31% 29.75% 已修改评测代码(影响较大)
+sc3 （只有relation_network +非cat）32.67% 18.64% 只留空间关系 cat 42.15% 27.61% 修改评测代码
+fpn(采用fpn网络，类别+relation_network) 0.01 47.06 0.5 32.70 测试时 box=1000 优于 box=512
+fpn(no flip, drop, cls_weight=0.2)
+fpn1(网络未变化 flip, no drop, cls_weight=0.2)
+fpn2(网络未变化 flip, no drop, cls_weight=0.5)
+fpn3(网络未变化 flip, no drop, cls_weight=0.5, mask_loss修改正确)
+fpn4(改变降学习率节点 7.5w开始降) 效果没有fpn3好
+fpn5(加入object与object之间的关系 512-128 不work 512-512 相对上一个好一点 但也不work
+原因分析：可能共用一套参数的原因 对object_part的relation有影响)
+(只计算非背景框之间的空间relation, em_dim=64,box_num=64 加一层relu(fc()) 特征降维到512 不work)
+(只计算非背景框之间的空间relation, em_dim=32,box_num=32 特征维度1024 不work)
+fpn_5 训练的模型都已删除 现fpn_5保存的是消融实验结果 只有cls_relation
+fpn_6 只有part_relation
+fpn_7 在cls_rela前加入spa_rela
+fpn_8 ours+spa
+
+与base区别 无肺纹理增多 而是肺结核
+
+训练公开数据集
+base 无级联box
+base_cls 有级联box center 指标下降
+base_spa 无级联box 所有指标下降 现加上级联box看效果 loss 添加错误 少loss_cls和loss_box 又重新开始训练
+
+yy_base_cls 使用yangyan123数据
+
+
+ablation study
+fpn5(只保存cls_relation)
+
+
+现存在的问题：
+1. loss_mask 很小
+
+训练记录
+[Oct15-13-56-36_lung-plain-01_step][e2e_mask_rcnn_R-50-FPN_hospital.yaml][Step 2461 / 192000]
+    loss: 1.024116, lr: 0.010000 time: 1.227458, eta: 2 days, 16:37:32
+    accuracy_cls: 0.949777
+    loss_cls: 0.842776, loss_bbox: 0.131950, loss_mask: 0.000025
+    loss_rpn_cls: 0.039913, loss_rpn_bbox: 0.011280
+    loss_rpn_cls_fpn2: 0.006391, loss_rpn_cls_fpn3: 0.013652, loss_rpn_cls_fpn4: 0.007511, loss_rpn_cls_fpn5: 0.005701, loss_rpn_cls_fpn6: 0.001120
+    loss_rpn_bbox_fpn2: 0.001241, loss_rpn_bbox_fpn3: 0.002487, loss_rpn_bbox_fpn4: 0.002073, loss_rpn_bbox_fpn5: 0.002555, loss_rpn_bbox_fpn6: 0.000942
+
+代码bug测试：
+1.图关系 正确
+2.空间关系正确
+
+lr 0.01
+
+不同的cat方式没有区别
+
+
+maskrcnn
+loss:0.59
+acc_cls:0.945
+loss_cls: 0.15 loos_box:0.08 loss_mask:0.25
+loss_rpn_cls: 0.06 loss_rpn_bbox:0.02
+mmdet
+loss_rpn_cls: 0.0291, loss_rpn_bbox: 0.0120,
+loss_cls: 0.2215, acc: 92.4668, loss_bbox: 0.1209,
+loss_mask: 0.3485, loss: 0.7319
