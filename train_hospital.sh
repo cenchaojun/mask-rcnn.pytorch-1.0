@@ -4,4 +4,3 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 python tools/train_net_hospital.py --dataset hospit
 # --load_ckpt /home/lianjie/mask-rcnn.pytorch-1.0/jeline_output/competition/ckpt/model_step7499.pth \
 # --resume
 
-
